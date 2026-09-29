@@ -1,0 +1,54 @@
+[project]
+name = "planner"
+version = "0.1.0"
+description = "Graph-based personal planner: Jac server, web, mobile and CLI"
+entry-point = "main.jac"
+kind = "fullstack"
+
+[dependencies.npm]
+react = "^18.2.0"
+react-dom = "^18.2.0"
+react-router-dom = "^6.22.0"
+react-error-boundary = "^5.0.0"
+react-hook-form = "^7.71.0"
+zod = "^4.3.6"
+"@hookform/resolvers" = "^5.2.2"
+
+[dependencies.npm.dev]
+vite = "^6.4.1"
+"@vitejs/plugin-react" = "^4.2.1"
+typescript = "^5.3.3"
+"@types/react" = "^18.2.0"
+"@types/react-dom" = "^18.2.0"
+
+[dev-dependencies]
+watchdog = ">=3.0.0"
+
+[serve]
+base_route_app = "app"
+
+[plugins.client]
+
+[test]
+directory = "tests"
+
+[scripts]
+server = "jac start main.jac"
+test = "jac test"
+
+[plugins.client.app_meta_data]
+title = "Planner"
+description = "Graph-based personal planner"
+theme_color = "#4f46e5"
+
+# Native mobile app (Capacitor). One-time: `jac setup mobile --platform ios`
+# (or android). Then `jac build --client mobile --platform ios`.
+[plugins.client.mobile]
+app_name = "Planner"
+app_id = "com.sawds.planner"
+
+# Where the NATIVE app finds the server. Leave empty for the web app (same
+# origin). Before a mobile build, set it to an address your phone can reach,
+# e.g. your laptop's LAN IP "http://192.168.1.25:8000" or a deployed URL.
+[plugins.client.api]
+base_url = ""

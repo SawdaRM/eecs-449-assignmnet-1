@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Planner CLI wrapper - lets you type `./plan today` instead of
+# `jac run cli/plan.jac today`. Symlink it onto your PATH to use `plan` anywhere.
+DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" && pwd)"
+cd "$DIR" && exec jac run cli/plan.jac "$@"

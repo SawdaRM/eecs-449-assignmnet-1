@@ -1,0 +1,15 @@
+.jac/
+.jac-test/
+node_modules/
+android/
+ios/
+capacitor.config.json
+package.json
+package-lock.json
+.vscode/
+.idea/
+.env
+__pycache__/
+.DS_Store
+Claude outputs/
+.venv/
