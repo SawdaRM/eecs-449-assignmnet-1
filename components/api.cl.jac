@@ -13,6 +13,7 @@ sv import from ..services.planner {
     TaskView, ProjectView, GoalView, HealthView, DayPlan, WeekPlan, WeekDay
 }
 sv import from ..services.integrations { SyncCanvas, SyncOura, GetHealth, SyncResult }
+sv import from ..services.demo { LoadDemo }
 
 
 # ================================================================ dates (local time)
@@ -231,6 +232,15 @@ async def:pub sync_canvas() -> SyncResult {
 async def:pub sync_oura() -> SyncResult {
     result = root spawn SyncOura(today=today_iso());
     return result.reports[0];
+}
+
+"""Fill the planner with a realistic demo week (plus mock Canvas + Oura)."""
+async def:pub load_demo() -> str {
+    result = root spawn LoadDemo(today=today_iso());
+    first: SyncResult = result.reports[0];
+    c = await sync_canvas();
+    o = await sync_oura();
+    return f"{first.message} {c.message} {o.message}";
 }
 
 async def:pub health(days: int) -> list[HealthView] {

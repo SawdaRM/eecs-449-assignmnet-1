@@ -10,6 +10,7 @@ import from services.planner {
     AddProject, ListProjects, AddGoal, ListGoals
 }
 import from services.integrations { SyncCanvas, SyncOura, GetHealth }
+import from services.demo { LoadDemo }
 
 # Global styles for the web + mobile client.
 cl import ".styles/global.css";

@@ -508,6 +508,26 @@ walker:pub PlanDay {
             note = f"Readiness {readiness}: normal day.";
         }
 
+        # Overbooked? Point at the task that's easiest to move: scheduled for
+        # today but not due today, deep-focus first on a tired day.
+        load = planned + sum([t.est_minutes for t in overdue]);
+        if load > capacity {
+            movable = [t for t in on_today if t.due != day];
+            movable.sort(
+                key=lambda t: Task : (
+                    0 if (t.energy == "high" and 0 < readiness and readiness < 70) else 1,
+                    0 - t.priority,
+                    0 - t.est_minutes
+                )
+            );
+            over = load - capacity;
+            if movable {
+                note += f" Over by {over} min - consider moving \"{movable[0].title}\" to tomorrow.";
+            } else {
+                note += f" Over by {over} min.";
+            }
+        }
+
         report DayPlan(
             day=day,
             health=health_view(h) if h is not None else None,

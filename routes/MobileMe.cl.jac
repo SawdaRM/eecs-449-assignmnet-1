@@ -1,7 +1,7 @@
 """Mobile Me: last week of readiness/sleep, sync, and view switching."""
 
 import from "@jac/runtime" { useNavigate }
-import from ..components.api { health, friendly_day, remember_view, err_text }
+import from ..components.api { health, friendly_day, remember_view, err_text, load_demo }
 import from ..components.SyncButton { SyncButton }
 import from ..components.Toast { Toast }
 sv import from ..services.planner { HealthView }
@@ -28,6 +28,16 @@ def:pub MobileMe -> JsxElement {
     async def synced(msg: str) {
         toast = msg;
         await load();
+    }
+
+    async def demo {
+        try {
+            msg = await load_demo();
+            toast = msg;
+            await load();
+        } except Exception as e {
+            toast = err_text(e);
+        }
     }
 
     def tone(score: int) -> str {
@@ -65,6 +75,7 @@ def:pub MobileMe -> JsxElement {
                 </section>
                 <section className="section" style={{"display": "flex", "flexDirection": "column", "gap": "8px"}}>
                     <SyncButton onDone={synced}/>
+                    <button onClick={demo}>Load demo week</button>
                     <button onClick={desktop}>Switch to desktop view</button>
                 </section>
             </div>

@@ -1,6 +1,6 @@
 import from ..components.api {
     week_view, list_projects, list_tasks, add_task, set_done, schedule_task,
-    today_iso, monday_of, add_days, month_day, hours, err_text
+    today_iso, monday_of, add_days, month_day, hours, err_text, load_demo
 }
 import from ..components.TaskRow { TaskRow }
 import from ..components.TaskEditor { TaskEditor }
@@ -76,6 +76,17 @@ def:pub WeekPage -> JsxElement {
         }
     }
 
+    async def demo {
+        try {
+            msg = await load_demo();
+            toast = msg;
+            start = monday_of(today_iso());
+            await load();
+        } except Exception as err {
+            toast = err_text(err);
+        }
+    }
+
     async def after_edit(msg: str) {
         toast = msg;
         await load();
@@ -120,6 +131,15 @@ def:pub WeekPage -> JsxElement {
                 <SyncButton onDone={after_edit}/>
             </div>
 
+            {if week is not None and len(allTasks) == 0 {
+                <div key="empty" className="card row wrap" style={{"marginBottom": "16px", "background": "var(--accent-soft)"}}>
+                    <div className="grow">
+                        <h2>Your planner is empty</h2>
+                        <div className="small muted">Add a task below, or load a sample week to see planning, dependencies and readiness in action.</div>
+                    </div>
+                    <button className="primary" onClick={demo}>Load demo week</button>
+                </div>
+            }}
             <form className="quick-add card" onSubmit={add}>
                 <input
                     className="title"

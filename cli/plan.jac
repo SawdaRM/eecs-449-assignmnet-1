@@ -573,6 +573,15 @@ def cmd_sync(a: any) {
     }
 }
 
+def cmd_demo(a: any) {
+    r = to_sync(api("LoadDemo", {}));
+    print(green("✔ ") + r.message);
+    for w in ["SyncCanvas", "SyncOura"] {
+        print(green("✔ ") + to_sync(api(w, {"mock": True})).message);
+    }
+    print(dim("Try: ./plan today   ./plan week   or open http://localhost:8000"));
+}
+
 def cmd_health(a: any) {
     rows = [to_health(x) for x in ((api("GetHealth", {"days": int(a.days)}) or []) as list[any])];
     if not rows {
@@ -687,6 +696,9 @@ def build_parser() -> argparse.ArgumentParser {
     r.add_argument("source", choices=["canvas", "oura", "all"]);
     r.add_argument("--mock", action="store_true", help="force mock data");
     r.set_defaults(fn=cmd_sync);
+
+    r = sub.add_parser("demo", help="load a realistic demo week (re-run to reset it)");
+    r.set_defaults(fn=cmd_demo);
 
     r = sub.add_parser("health", help="recent readiness & sleep");
     r.add_argument("--days", type=_int, default=7);

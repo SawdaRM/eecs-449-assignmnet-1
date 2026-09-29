@@ -1,19 +1,42 @@
-# Planner: a graph-based personal planner in Jac
+# Planner: a readiness-aware, graph-based planner in Jac
 
-EECS 449, Assignment 1. This is one planning tool with four parts that share a single backend:
+**EECS 449, Assignment 1.** A personal planner that knows *what blocks what* and *how much you can actually do today*. It has four parts built in Jac that share one backend:
 
 | Part | Where | What it's for |
 |---|---|---|
-| **Server** | `main.jac`, `services/` | Planning logic and persistent per-user graph storage, served as a REST API |
-| **Web** | `routes/` (`/`, `/today`, `/projects`) | Plan the week: drag tasks between days, edit dependencies, review projects and goals |
-| **Mobile** | `routes/Mobile*` (`/m`), Capacitor build | Check off today's tasks, quick add, see what's coming up and your readiness |
-| **CLI** | `cli/plan.jac`, `./plan` | Quick capture and daily use from the terminal |
-
-All four talk to the same server and share one plan (there is no login), so a task added from the terminal appears on the web board and your phone right away.
+| **Server** | `main.jac`, `services/` | All planning logic, as graph walkers served over REST, plus persistent storage |
+| **Web** | `routes/` (`/`, `/today`, `/projects`) | Plan the week: drag tasks between days, edit dependencies, track goals |
+| **Mobile** | `routes/Mobile*` (`/m`), Capacitor build | On the go: check off today, quick add, see what's next and your readiness |
+| **CLI** | `cli/plan.jac`, `./plan` | Fast capture and a daily plan without leaving the terminal |
 
 | Web: week board | Web: today | Mobile: today |
 |---|---|---|
 | ![Week board](docs/web-week.png) | ![Today](docs/web-today.png) | ![Mobile](docs/mobile-today.png) |
+
+## What makes it stand out
+
+- **It plans your day for you, sized to how you actually feel.** `PlanDay` reads your readiness score (Oura, or mock data) and sets the day's capacity: about 6h on a strong day, 5h on a normal day, 3h on a low one. It lists what's overdue and what's due, fills the rest with the best unblocked tasks, and pushes deep-focus work later when you're tired. If you've overbooked, it says so and names the task to move ("Over by 40 min, consider moving *Build the web week board* to tomorrow").
+- **Tasks know what they're waiting on.** "Record the demo video" can't start until "Build the web board" and "Polish mobile screens" are done. Blocked tasks are marked everywhere, *Next up* only shows what you can start right now, and a graph walk refuses links that would create a loop.
+- **The data model is a real graph, not a table.** Tasks → Projects → Goals are typed edges, so a goal's progress rolls up two hops. The logic is written as Jac walkers that traverse that graph.
+- **All four parts are one app.** Every client calls the same walkers. Add a task in the terminal, it's on the web board and your phone right away. Check it off on your phone, and `./plan today` shows it done. There's no sign-in: everything shares one plan.
+- **Each client is built for how you'd use it.** Web is for planning (a drag-and-drop week, a full editor, goals). Mobile is for doing (big tap targets, one-tap quick add, bottom tabs; phones get it automatically, and it builds as a native iOS/Android app). The CLI is for speed (`./plan add Groceries -o today -e low`, `./plan done 2`).
+- **Real-life inputs.** Canvas assignments become tasks, with the course as the project. Oura sleep and readiness drive the plan. Both work with realistic mock data out of the box, and syncing twice never creates duplicates.
+- **Reliable.** Data persists across restarts. There are 7 walker tests (`jac test`), plus browser tests of the whole web + mobile + CLI flow during development. Clear error messages come back from the server, and there's a one-command `./start.sh`.
+
+## 2-minute tour (for graders)
+
+```bash
+./start.sh                  # terminal 1: setup (first time) + server. Wait for "Server ready".
+./plan demo                 # terminal 2: loads a realistic week (you can also click "Load demo week" on the web)
+```
+
+1. **Terminal:** `./plan today`. You'll see today's plan with readiness, overdue items and the load vs. capacity, plus the *move this* hint if the day is overbooked. Then run `./plan next` (only unblocked tasks) and `./plan week`.
+2. **Web, http://localhost:8000:** the **Week** board. Drag a card to another day. Click *Record the demo video* to see the two tasks it waits on. Tick *Build the web week board* done, and the video task's blocker list shrinks.
+3. **Today** tab: the readiness card and load meter. If there are suggestions, *Add all to today* schedules them.
+4. **Projects & goals:** two goals with progress rolling up from their projects' tasks.
+5. **Phone:** open `http://<your-laptop-ip>:8000` on the same Wi-Fi (the address is printed by `./start.sh`), or click *Mobile view* on the web. Tick a task, add one with **+**, then run `./plan today` in the terminal to see both changes.
+
+`./plan demo` only replaces its own demo tasks, so it's safe to re-run for a fresh week.
 
 ## The idea
 
@@ -35,6 +58,10 @@ Walkers traverse that graph to answer planning questions:
 - **Progress rollups**: a goal's progress is counted two hops away (Goal ← Project ← Task).
 
 There is no login: every endpoint is a public walker (`walker:pub`), so all clients read and write one shared plan on the server. Everything persists across server restarts (in `.jac/data/`).
+
+| Web: task editor with "waits on" | Web: projects & goals | Mobile: upcoming |
+|---|---|---|
+| ![Editor](docs/web-editor.png) | ![Projects](docs/web-projects.png) | ![Upcoming](docs/mobile-upcoming.png) |
 
 ## Run it
 
@@ -88,7 +115,7 @@ The native shell opens straight into the mobile UI. The server allows cross-orig
 
 ```bash
 ./plan status                           # is the server up?
-./plan sync all                         # import Canvas assignments + Oura data (mock by default)
+./plan demo                             # load a realistic demo week (or: ./plan sync all for just Canvas + Oura)
 
 ./plan add Write server walkers -p "EECS 449" -d fri -P 1 -e high -t 120
 ./plan add Build CLI -p "EECS 449" -t 60
@@ -127,7 +154,7 @@ Canvas assignments become tasks, with the course as their project. Oura data bec
 ## Tests
 
 ```bash
-jac test          # walker-level tests: CRUD, dependencies, cycles, capacity, idempotent sync
+jac test          # walker tests: CRUD, dependencies, cycles, capacity, idempotent sync, demo data
 ```
 
 Tests run on a local test root and clear it first. They never touch real user data.
@@ -144,6 +171,7 @@ Every endpoint is `POST /walker/<Name>` with a JSON body (no auth header needed)
 | `NextActions`, `PlanDay`, `WeekView` | Planning views |
 | `AddProject`, `ListProjects`, `AddGoal`, `ListGoals` | Projects and goals with progress rollups |
 | `SyncCanvas`, `SyncOura`, `GetHealth` | Integrations |
+| `LoadDemo` | Load or refresh the demo week |
 
 Send `today: "YYYY-MM-DD"` (your local date) so "today" means your day, not the server's.
 
@@ -155,6 +183,7 @@ start.sh                   one-command setup + run
 services/models.jac        nodes, edges, view objects (the shared wire contract)
 services/planner.jac       task / planning / project / goal walkers
 services/integrations.jac  Canvas + Oura sync
+services/demo.jac          LoadDemo: the sample week behind ./plan demo
 components/api.cl.jac      client data layer: every web/mobile call to a walker goes through here
 components/*.cl.jac        shared UI: TaskRow, TaskEditor, HealthCard, SyncButton, Toast
 routes/Web*.cl.jac, WeekPage, TodayPage, ProjectsPage   web app

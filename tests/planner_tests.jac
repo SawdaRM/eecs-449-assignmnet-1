@@ -104,3 +104,16 @@ test "delete removes the task" {
     remaining = titles((root spawn ListTasks(status="all", today=DAY)).reports[0]);
     assert "t-delete-me" not in remaining;
 }
+
+test "demo week loads and re-running replaces it" {
+    reset();
+    import from services.demo { LoadDemo }
+    first = (root spawn LoadDemo(today=DAY)).reports[0];
+    again = (root spawn LoadDemo(today=DAY)).reports[0];
+    tasks = (root spawn ListTasks(status="all", today=DAY)).reports[0];
+    assert first.created == again.created;
+    assert again.updated == first.created;       # all old demo tasks replaced
+    assert len(tasks) == first.created;
+    blocked = [t for t in tasks if t.blocked];
+    assert len(blocked) > 0;                     # dependency chains present
+}
