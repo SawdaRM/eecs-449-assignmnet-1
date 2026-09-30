@@ -9,7 +9,8 @@ planner data is never touched.
 
 import from services.models { Task, Project, Goal, HealthSnapshot, TaskView }
 import from services.planner {
-    AddTask, CompleteTask, LinkDependency, NextActions, PlanDay, ListTasks, DeleteTask
+    AddTask, CompleteTask, LinkDependency, NextActions, PlanDay, ListTasks, DeleteTask,
+    ClearCompleted, WeekView
 }
 import from services.integrations { SyncCanvas, SyncOura }
 
@@ -116,4 +117,22 @@ test "demo week loads and re-running replaces it" {
     assert len(tasks) == first.created;
     blocked = [t for t in tasks if t.blocked];
     assert len(blocked) > 0;                     # dependency chains present
+}
+
+test "finished tasks stay in place until cleared" {
+    reset();
+    t = (root spawn AddTask(title="t-stays", scheduled=DAY, today=DAY)).reports[0];
+    add("t-other");
+    root spawn CompleteTask(id=t.id, today=DAY);
+    plan = (root spawn PlanDay(today=DAY)).reports[0];
+    assert "t-stays" in titles(plan.today);          # still listed, just done
+    week = (root spawn WeekView(today=DAY)).reports[0];
+    assert "t-stays" in [v.title for d in week.days for v in d.tasks];
+    root spawn CompleteTask(id=t.id, done=False, today=DAY);   # un-cross it
+    root spawn CompleteTask(id=t.id, today=DAY);
+    cleared = (root spawn ClearCompleted()).reports[0];
+    assert cleared == 1;
+    assert "t-stays" not in titles((root spawn ListTasks(status="all", today=DAY)).reports[0]);
+    assert "t-stays" not in titles((root spawn PlanDay(today=DAY)).reports[0].today);
+    assert "t-other" in titles((root spawn ListTasks(status="all", today=DAY)).reports[0]);
 }

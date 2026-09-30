@@ -44,6 +44,7 @@ node Task {
     has source: str = "manual";   # "manual" | "canvas"
     has external_id: str = "";    # id in the source system, for idempotent sync
     has tags: list[str] = [];
+    has archived: bool = False;   # hidden by "Clear completed" (still counts toward progress)
 }
 
 node HealthSnapshot {

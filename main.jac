@@ -5,7 +5,7 @@
 """
 
 import from services.planner {
-    AddTask, UpdateTask, CompleteTask, ScheduleTask, DeleteTask, ListTasks,
+    AddTask, UpdateTask, CompleteTask, ScheduleTask, DeleteTask, ListTasks, ClearCompleted,
     LinkDependency, NextActions, PlanDay, WeekView,
     AddProject, ListProjects, AddGoal, ListGoals
 }

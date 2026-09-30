@@ -3,6 +3,7 @@
 import from ..components.api { week_view, set_done, today_iso, friendly_day, month_day, err_text }
 import from ..components.TaskRow { TaskRow }
 import from ..components.Toast { Toast }
+import from ..components.ClearDoneButton { ClearDoneButton }
 sv import from ..services.planner { TaskView, WeekPlan }
 
 def:pub MobileUpcoming -> JsxElement {
@@ -23,6 +24,11 @@ def:pub MobileUpcoming -> JsxElement {
         }
     }
 
+    async def after_clear(msg: str) {
+        toast = msg;
+        await load();
+    }
+
     async def toggle(t: TaskView) {
         try {
             await set_done(t.id, t.status != "done");
@@ -37,10 +43,13 @@ def:pub MobileUpcoming -> JsxElement {
 
     return
         <>
-            <header className="m-head"><h1>Upcoming</h1></header>
+            <header className="m-head">
+                <h1 className="grow">Upcoming</h1>
+                <ClearDoneButton onDone={after_clear} small={True}/>
+            </header>
             <div className="m-body">
                 {for d in days {
-                    open_tasks = [t for t in d.tasks if t.status == "todo"];
+                    open_tasks = d.tasks;
                     if len(open_tasks) > 0 {
                         <section key={d.day} className="section">
                             <h3>
@@ -60,7 +69,7 @@ def:pub MobileUpcoming -> JsxElement {
                         }}
                     </section>
                 }}
-                {if week is not None and len(unscheduled) == 0 and len([t for d in days for t in d.tasks if t.status == "todo"]) == 0 {
+                {if week is not None and len(unscheduled) == 0 and len([t for d in days for t in d.tasks]) == 0 {
                     <p key="s63" className="muted">Nothing coming up. Enjoy it.</p>
                 }}
             </div>

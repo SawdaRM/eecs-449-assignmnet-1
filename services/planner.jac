@@ -133,7 +133,6 @@ def _score(t: Task, today: str, readiness: int) -> int {
 def _sort_views(views: list[TaskView]) -> list[TaskView] {
     views.sort(
         key=lambda v: TaskView : (
-            v.status == "done",
             v.scheduled or v.due or "9999-99-99",
             v.due or "9999-99-99",
             v.priority,
@@ -325,6 +324,9 @@ walker:pub ListTasks {
     }
 
     can check with Task entry {
+        if here.archived {
+            skip;
+        }
         if self.status != "all" and here.status != self.status {
             skip;
         }
@@ -343,6 +345,26 @@ walker:pub ListTasks {
 
     can finish with Root exit {
         report _sort_views(self.found);
+    }
+}
+
+walker:pub ClearCompleted {
+    """Hide every finished task from the lists ("Clear completed").
+
+    Cleared tasks are archived, not deleted: they still count toward project
+    and goal progress. Reports how many were cleared.
+    """
+    has reports: list[int] = [];
+
+    can clear with Root entry {
+        n = 0;
+        for t in [root-->[?:Task]] {
+            if t.status == "done" and not t.archived {
+                t.archived = True;
+                n += 1;
+            }
+        }
+        report n;
     }
 }
 
@@ -433,16 +455,16 @@ walker:pub NextActions {
 walker:pub PlanDay {
     """Build today's plan.
 
-    - overdue:   open tasks whose due date has passed
-    - today:     tasks scheduled or due today
+    - overdue:   tasks whose due date has passed (still open, or finished today)
+    - today:     tasks scheduled or due today, plus anything finished today
     - suggested: unblocked tasks that fit the remaining capacity, ranked by
                  due date, priority and (if you have Oura data) energy fit
+    Finished tasks stay in their section (crossed out) until you clear them.
     `commit: true` schedules the suggestions onto today.
     """
     has today: str = "",
         commit: bool = False,
-        open_tasks: list[Task] = [],
-        done_today: list[Task] = [],
+        tasks: list[Task] = [],
         reports: list[DayPlan] = [];
 
     can start with Root entry {
@@ -450,11 +472,8 @@ walker:pub PlanDay {
     }
 
     can collect with Task entry {
-        day = _day_or_today(self.today);
-        if here.status == "todo" {
-            self.open_tasks.append(here);
-        } elif here.done_at.startswith(day) {
-            self.done_today.append(here);
+        if not here.archived {
+            self.tasks.append(here);
         }
     }
 
@@ -464,16 +483,25 @@ walker:pub PlanDay {
         readiness = h.readiness if h is not None else 0;
         capacity = _capacity(readiness);
 
-        overdue = [t for t in self.open_tasks if t.due and t.due < day];
+        def done_today(t: Task) -> bool {
+            return t.status == "done" and t.done_at.startswith(day);
+        }
+
+        overdue = [
+            t for t in self.tasks
+            if t.due and t.due < day and (t.status == "todo" or done_today(t))
+        ];
         on_today = [
-            t for t in self.open_tasks
-            if (t.scheduled == day or t.due == day) and t not in overdue
+            t for t in self.tasks
+            if t not in overdue
+            and ((t.scheduled == day or t.due == day) or done_today(t))
         ];
         planned = sum([t.est_minutes for t in on_today]);
 
         pool = [
-            t for t in self.open_tasks
-            if t not in on_today
+            t for t in self.tasks
+            if t.status == "todo"
+            and t not in on_today
             and t not in overdue
             and not _is_blocked(t)
             and not (t.scheduled and t.scheduled > day)
@@ -512,7 +540,7 @@ walker:pub PlanDay {
         # today but not due today, deep-focus first on a tired day.
         load = planned + sum([t.est_minutes for t in overdue]);
         if load > capacity {
-            movable = [t for t in on_today if t.due != day];
+            movable = [t for t in on_today if t.due != day and t.status == "todo"];
             movable.sort(
                 key=lambda t: Task : (
                     0 if (t.energy == "high" and 0 < readiness and readiness < 70) else 1,
@@ -536,7 +564,7 @@ walker:pub PlanDay {
             overdue=_sort_views([task_view(t, day) for t in overdue]),
             today=_sort_views([task_view(t, day) for t in on_today]),
             suggested=[task_view(t, day) for t in suggested],
-            done_today=[task_view(t, day) for t in self.done_today],
+            done_today=[],
             note=note
         );
     }
@@ -556,7 +584,7 @@ walker:pub WeekView {
             d = date.fromisoformat(day);
             first = d - timedelta(days=d.weekday());
         }
-        tasks = [t for t in [root-->[?:Task]]];
+        tasks = [t for t in [root-->[?:Task]] if not t.archived];
         days: list[WeekDay] = [];
         for i in range(7) {
             cur = (first + timedelta(days=i)).isoformat();
@@ -575,7 +603,7 @@ walker:pub WeekView {
         }
         unscheduled = [
             task_view(t, day) for t in tasks
-            if t.status == "todo" and not t.scheduled and not t.due
+            if not t.scheduled and not t.due
         ];
         report WeekPlan(
             start=first.isoformat(), days=days, unscheduled=_sort_views(unscheduled)

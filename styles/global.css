@@ -142,7 +142,13 @@ label.field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; 
   border: 1px solid var(--border);
 }
 .task + .task { margin-top: 6px; }
-.task.done .title { color: var(--faint); text-decoration: line-through; }
+.task.done .title {
+  color: var(--faint);
+  text-decoration: line-through;
+  text-decoration-color: #dc2626;
+  text-decoration-thickness: 2px;
+}
+.task.done .meta { opacity: 0.6; }
 .task.blocked { opacity: 0.7; }
 .task .body { flex: 1; min-width: 0; cursor: pointer; }
 .task .title { font-weight: 500; overflow-wrap: anywhere; }

@@ -263,7 +263,7 @@ def fmt_day(d: str) -> str {
 }
 
 def task_text(t: TaskView) -> str {
-    title = dim(t.title) if t.status == "done" else t.title;
+    title = c(t.title, "9;31") if t.status == "done" else t.title;   # red strike-through
     if t.priority == 1 and t.status != "done" {
         title = bold(title) + red(" !");
     }
@@ -440,6 +440,14 @@ def cmd_done(a: any) {
         mark = "reopened" if a.undo else "done";
         print(green(f"✔ {mark}: ") + t.title);
     }
+}
+
+def cmd_clear(a: any) {
+    n = int(api("ClearCompleted", {}) or 0);
+    cfg = load_config();
+    cfg.last = [];
+    save_config(cfg);
+    print(green("✔ ") + (f"cleared {n} completed task" + ("" if n == 1 else "s") if n else "no completed tasks to clear"));
 }
 
 def cmd_rm(a: any) {
@@ -651,6 +659,9 @@ def build_parser() -> argparse.ArgumentParser {
     r.add_argument("tasks", nargs="+");
     r.add_argument("-u", "--undo", action="store_true", help="reopen instead");
     r.set_defaults(fn=cmd_done);
+
+    r = sub.add_parser("clear", help="clear (hide) all completed tasks");
+    r.set_defaults(fn=cmd_clear);
 
     r = sub.add_parser("rm", help="delete task(s)");
     r.add_argument("tasks", nargs="+");

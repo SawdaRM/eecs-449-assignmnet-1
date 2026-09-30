@@ -5,6 +5,7 @@ import from ..components.TaskRow { TaskRow }
 import from ..components.TaskEditor { TaskEditor }
 import from ..components.HealthCard { HealthCard }
 import from ..components.SyncButton { SyncButton }
+import from ..components.ClearDoneButton { ClearDoneButton }
 import from ..components.Toast { Toast }
 sv import from ..services.planner { TaskView, ProjectView, DayPlan }
 
@@ -72,6 +73,7 @@ def:pub TodayPage -> JsxElement {
             <div className="page-head">
                 <h1>{long_day(plan.day)}</h1>
                 <span className="spacer"/>
+                <ClearDoneButton onDone={after_edit}/>
                 <SyncButton onDone={after_edit}/>
             </div>
             <div className="split">

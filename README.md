@@ -17,6 +17,7 @@ Planner is a personal planner that knows **what blocks what** and **how much you
 - **Readiness-aware daily plan.** *Today* lists what's overdue and what's due, then fills the rest of the day with the best unblocked tasks. How much it plans depends on your readiness score: about 6h on a strong day, 5h on a normal day, 3h on a low one. Deep-focus work moves later when you're tired. If you've overbooked, it tells you which task to move.
 - **Tasks that wait on other tasks.** A task can wait on others ("Record the demo video" waits on "Build the web board" and "Polish mobile screens"). Blocked tasks are marked everywhere, *Next up* shows only what you can start now, and a link that would create a loop is refused.
 - **Week planning board.** A Mon–Sun board plus a *Someday* column. Drag tasks between days, and click any task to edit everything about it.
+- **Check off without losing track.** Ticking a task crosses it out with a red line but leaves it where it was, so you can see what you've done. Tick it again to un-cross it. **Clear completed** (on every page, and `./plan clear`) hides all crossed-out tasks at once. They still count toward project and goal progress.
 - **Projects and goals.** Tasks belong to projects, and projects support goals. Goal progress rolls up automatically.
 - **Canvas and Oura.** Canvas assignments become tasks, with the course as the project. Oura sleep and readiness shape the plan. Both work out of the box with realistic mock data, and syncing twice never duplicates anything.
 - **Four clients, one plan.** A task added in the terminal shows up on the web board and your phone. Check it off on your phone and the CLI sees it. There's no sign-in: everyone connected to the server shares the same plan.
@@ -57,7 +58,7 @@ Shortcut: `./start.sh` does the install steps above (only if needed) and then ru
 
 **Using the web app:**
 
-- **Week** (`/`): drag tasks between days. Click a task to edit its dates, priority, energy, project, tags and what it *waits on*. Tick the circle to finish it. The quick-add bar is at the top.
+- **Week** (`/`): drag tasks between days. Click a task to edit its dates, priority, energy, project, tags and what it *waits on*. Tick the circle to finish it: it stays in place, crossed out in red, and ticking it again un-crosses it. **Clear completed** hides every finished task. The quick-add bar is at the top.
 - **Today** (`/today`): overdue, today and suggested tasks, with a readiness card and a load meter. *Add all to today* schedules the suggestions.
 - **Projects & goals** (`/projects`): create goals, link projects to them, and watch progress roll up.
 
@@ -73,7 +74,7 @@ The mobile app is the same Jac client with a phone layout (`/m`), connected to t
 
 **Using it:** there are four tabs.
 
-- **Today:** tap a circle to finish a task. *Plan my day* accepts the suggestions.
+- **Today:** tap a circle to cross a task out, and tap again to undo. *Plan my day* accepts the suggestions, and **Clear completed** hides finished tasks.
 - **Upcoming:** the next 7 days.
 - **+ Add:** type a title, then tap chips for when, how long and how much energy.
 - **Me:** 7 days of readiness, *Sync Canvas + Oura*, *Load demo week*, and the switch to the desktop view.
@@ -106,7 +107,8 @@ The CLI (`cli/plan.jac`) talks to the same server over REST. Run it from the rep
 ./plan add Finish HW 4 -p "EECS 482" -d fri -P 1 -e high -t 120
 ./plan add Groceries -o today -e low --tags errand
 ./plan ls                     # numbers the tasks 1, 2, 3...
-./plan done 2                 # ...so you can refer to them by number
+./plan done 2                 # ...so you can refer to them by number (./plan done -u 2 un-crosses it)
+./plan clear                  # hide all completed tasks
 ./plan dep 3 1                # task 3 waits on task 1
 ./plan sched 4 tomorrow       # move a task to another day
 ./plan edit 4 -t 45 --tags school
@@ -146,7 +148,7 @@ Because the planning logic lives only in the walkers, the three clients can't di
 - **It uses Jac's graph model for real.** Dependencies, cycle checks and progress rollups are graph traversals, not SQL-style lookups.
 - **Each client suits its job.** The web app is for planning (drag-and-drop week, full editor, goals). The mobile app is for doing (big tap targets, one-tap add, tabs; it also builds as a native app). The CLI is for speed (`./plan add ...`, `./plan done 2`).
 - **Real inputs.** Canvas and Oura, with mock data so it works immediately.
-- **Polish and reliability.** Light and dark themes, empty states, clear error messages, idempotent syncs, data that survives restarts, 7 automated walker tests (`jac test`), and the whole web + mobile + CLI flow checked in a browser from a fresh checkout.
+- **Polish and reliability.** Light and dark themes, empty states, clear error messages, idempotent syncs, data that survives restarts, 8 automated walker tests (`jac test`), and the whole web + mobile + CLI flow checked in a browser from a fresh checkout.
 
 | Task editor ("waits on") | Projects & goals | Mobile: upcoming |
 |---|---|---|

@@ -6,6 +6,7 @@ import from ..components.api {
 import from ..components.TaskRow { TaskRow }
 import from ..components.TaskEditor { TaskEditor }
 import from ..components.Toast { Toast }
+import from ..components.ClearDoneButton { ClearDoneButton }
 sv import from ..services.planner { TaskView, ProjectView, GoalView }
 
 def:pub ProjectsPage -> JsxElement {
@@ -84,11 +85,15 @@ def:pub ProjectsPage -> JsxElement {
         editing = t;
     }
 
-    loose = [t for t in tasks if t.status == "todo" and not t.project_name];
+    loose = [t for t in tasks if not t.project_name];
 
     return
         <div>
-            <div className="page-head"><h1>Projects & goals</h1></div>
+            <div className="page-head">
+                <h1>Projects & goals</h1>
+                <span className="spacer"/>
+                <ClearDoneButton onDone={after_edit}/>
+            </div>
 
             <section className="section">
                 <h3>Goals</h3>
@@ -170,7 +175,7 @@ def:pub ProjectsPage -> JsxElement {
                                 <div style={{"width": str(int(p.progress * 100)) + "%"}}/>
                             </div>
                             {for t in tasks {
-                                if t.project_id == p.id and t.status == "todo" {
+                                if t.project_id == p.id {
                                     <TaskRow key={t.id} task={t} onToggle={toggle} onOpen={open} showProject={False}/>
                                 }
                             }}

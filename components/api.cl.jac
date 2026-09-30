@@ -7,7 +7,7 @@ with each other and with the CLI.
 """
 
 sv import from ..services.planner {
-    AddTask, UpdateTask, CompleteTask, ScheduleTask, DeleteTask, ListTasks,
+    AddTask, UpdateTask, CompleteTask, ScheduleTask, DeleteTask, ListTasks, ClearCompleted,
     LinkDependency, NextActions, PlanDay, WeekView,
     AddProject, ListProjects, AddGoal, ListGoals,
     TaskView, ProjectView, GoalView, HealthView, DayPlan, WeekPlan, WeekDay
@@ -165,6 +165,12 @@ async def:pub schedule_task(id: str, on: str) -> TaskView {
 
 async def:pub delete_task(id: str) -> str {
     result = root spawn DeleteTask(id=id);
+    return result.reports[0];
+}
+
+"""Hide all finished tasks (they're archived, so progress still counts them)."""
+async def:pub clear_completed() -> int {
+    result = root spawn ClearCompleted();
     return result.reports[0];
 }
 

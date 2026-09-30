@@ -4,6 +4,7 @@ import from ..components.api { plan_day, set_done, long_day, err_text }
 import from ..components.TaskRow { TaskRow }
 import from ..components.HealthCard { HealthCard }
 import from ..components.Toast { Toast }
+import from ..components.ClearDoneButton { ClearDoneButton }
 sv import from ..services.planner { TaskView, DayPlan }
 
 def:pub MobileToday -> JsxElement {
@@ -36,6 +37,11 @@ def:pub MobileToday -> JsxElement {
         }
     }
 
+    async def after_clear(msg: str) {
+        toast = msg;
+        await load();
+    }
+
     async def accept {
         busy = True;
         try {
@@ -52,7 +58,8 @@ def:pub MobileToday -> JsxElement {
         return <div className="m-head"><h1>Today</h1></div>;
     }
 
-    left = len(plan.overdue) + len(plan.today);
+    shown: list[TaskView] = plan.overdue + plan.today;
+    left = len([t for t in shown if t.status == "todo"]);
 
     return
         <>
@@ -61,6 +68,7 @@ def:pub MobileToday -> JsxElement {
                     <div className="date">{long_day(plan.day)}</div>
                     <h1>{"All clear" if left == 0 else f"{left} to do today"}</h1>
                 </div>
+                <ClearDoneButton onDone={after_clear} small={True}/>
             </header>
             <div className="m-body">
                 <div className="section"><HealthCard plan={plan}/></div>

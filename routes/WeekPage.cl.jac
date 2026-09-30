@@ -5,6 +5,7 @@ import from ..components.api {
 import from ..components.TaskRow { TaskRow }
 import from ..components.TaskEditor { TaskEditor }
 import from ..components.SyncButton { SyncButton }
+import from ..components.ClearDoneButton { ClearDoneButton }
 import from ..components.Toast { Toast }
 sv import from ..services.planner { TaskView, ProjectView, WeekPlan }
 
@@ -128,6 +129,7 @@ def:pub WeekPage -> JsxElement {
                     {f"{open_count} open · {hours(week_minutes)} planned"}
                 </span>
                 <span className="spacer"/>
+                <ClearDoneButton onDone={after_edit}/>
                 <SyncButton onDone={after_edit}/>
             </div>
 
