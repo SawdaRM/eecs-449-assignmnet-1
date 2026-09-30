@@ -1,3 +1,4 @@
+# Sawda Mim , uniqname: sawdam, UMID: 95969742
 # Planner: a readiness-aware, graph-based planner in Jac
 
 **EECS 449, Assignment 1.** A personal planner that knows *what blocks what* and *how much you can actually do today*. It has four parts built in Jac that share one backend:
