@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
-# One command to run the planner:   ./start.sh
+# Setup + run in one step:   ./start.sh
 #
-# First run: creates .venv (Python 3.12+), installs Jac, installs the web
-# client's packages. Every run: starts the server + web/mobile app and prints
-# the link to open. Keep this terminal open while you use the app.
+# Creates .venv (Python 3.12+) and installs Jac the first time, then runs
+# `jac run` (server + web/mobile app). If Jac is already installed you can
+# just run `jac run` yourself. Keep this terminal open while you use the app.
 set -e
 cd "$(dirname "$0")"
-PORT="${PORT:-8000}"
 
 # 1. Python 3.12+ virtual env with Jac installed
 if [ ! -x .venv/bin/jac ]; then
@@ -39,18 +38,19 @@ if [ ! -d .jac/client/node_modules ]; then
   jac install
 fi
 
-# 3. Make sure nothing else is using the port
-if command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
-  echo "Port $PORT is already in use (maybe the planner is already running?)."
-  echo "Stop that process, or pick another port:  PORT=8080 ./start.sh"
-  exit 1
-fi
+# 3. Make sure nothing else is using the ports (8000 = app, 8001 = API in dev mode)
+for p in 8000 8001; do
+  if command -v lsof >/dev/null 2>&1 && lsof -iTCP:"$p" -sTCP:LISTEN >/dev/null 2>&1; then
+    echo "Port $p is already in use (maybe the planner is already running?). Stop that process and try again."
+    exit 1
+  fi
+done
 
 LAN_IP="$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}')"
 echo
-echo "  Planner is starting. When you see 'Server ready', open:"
-echo "    Web:    http://localhost:$PORT"
-[ -n "$LAN_IP" ] && echo "    Phone:  http://$LAN_IP:$PORT   (same Wi-Fi)"
+echo "  Planner is starting (jac run). When the URLs appear, open:"
+echo "    Web:    http://localhost:8000"
+[ -n "$LAN_IP" ] && echo "    Phone:  http://$LAN_IP:8000   (same Wi-Fi)"
 echo "    CLI:    ./plan today   (in another terminal)"
 echo
-exec jac start main.jac --port "$PORT"
+exec jac run

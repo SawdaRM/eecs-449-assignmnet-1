@@ -12,4 +12,4 @@ package-lock.json
 __pycache__/
 .DS_Store
 Claude outputs/
-.venv/
+.venv

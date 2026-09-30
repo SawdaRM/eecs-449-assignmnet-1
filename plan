@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
-# Planner CLI wrapper - lets you type `./plan today` instead of
-# `jac run cli/plan.jac today`. Symlink it onto your PATH to use `plan` anywhere.
+# Planner CLI wrapper: `./plan today` instead of `jac run cli/plan.jac today`.
+# Uses the project's .venv if it exists, otherwise whatever `jac` is on PATH.
+# Symlink it onto your PATH to use `plan` from anywhere.
 DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")" && pwd)"
-cd "$DIR" && exec jac run cli/plan.jac "$@"
+JAC="jac"
+[ -x "$DIR/.venv/bin/jac" ] && JAC="$DIR/.venv/bin/jac"
+if ! command -v "$JAC" >/dev/null 2>&1; then
+  echo "error: can't find 'jac'. Activate the virtual env first (source .venv/bin/activate) or run ./start.sh once." >&2
+  exit 1
+fi
+cd "$DIR" && exec "$JAC" run cli/plan.jac "$@"
