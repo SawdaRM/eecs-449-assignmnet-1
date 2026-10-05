@@ -7,18 +7,23 @@ test starts by clearing that root, so reruns are repeatable and your real
 planner data is never touched.
 """
 
-import from services.models { Task, Project, Goal, HealthSnapshot, TaskView }
+import from services.models { Task, Project, Goal, HealthSnapshot, CalEvent, CalSettings, TaskView }
 import from services.planner {
     AddTask, CompleteTask, LinkDependency, NextActions, PlanDay, ListTasks, DeleteTask,
     ClearCompleted, WeekView
 }
 import from services.integrations { SyncCanvas, SyncOura }
+import from services.calendar {
+    SyncCalendar, CalendarWeekView, SaveCalendarSettings, parse_calendar
+}
+import from datetime { datetime }
 
 glob DAY: str = "2026-09-28";
 
 def reset() {
     for n in [root-->] {
-        if isinstance(n, Task) or isinstance(n, Project) or isinstance(n, Goal) or isinstance(n, HealthSnapshot) {
+        if isinstance(n, Task) or isinstance(n, Project) or isinstance(n, Goal) or isinstance(n, HealthSnapshot)
+            or isinstance(n, CalEvent) or isinstance(n, CalSettings) {
             del n;
         }
     }
@@ -135,4 +140,67 @@ test "finished tasks stay in place until cleared" {
     assert "t-stays" not in titles((root spawn ListTasks(status="all", today=DAY)).reports[0]);
     assert "t-stays" not in titles((root spawn PlanDay(today=DAY)).reports[0].today);
     assert "t-other" in titles((root spawn ListTasks(status="all", today=DAY)).reports[0]);
+}
+
+glob ICS: str = "\n".join([
+    "BEGIN:VCALENDAR",
+    # weekly Mon/Wed class, 4 times, with one Wednesday skipped
+    "BEGIN:VEVENT", "UID:class", "SUMMARY:Lecture", "DTSTART:20260928T103000", "DTEND:20260928T120000",
+    "RRULE:FREQ=WEEKLY;BYDAY=MO,WE;COUNT=4", "EXDATE:20260930T103000", "END:VEVENT",
+    # one occurrence moved an hour later
+    "BEGIN:VEVENT", "UID:class", "SUMMARY:Lecture (moved)", "RECURRENCE-ID:20261005T103000",
+    "DTSTART:20261005T113000", "DTEND:20261005T130000", "END:VEVENT",
+    # a cancelled event and an all-day event
+    "BEGIN:VEVENT", "UID:gone", "SUMMARY:Cancelled", "STATUS:CANCELLED", "DTSTART:20260929T090000", "DTEND:20260929T100000", "END:VEVENT",
+    "BEGIN:VEVENT", "UID:fair", "SUMMARY:Career fair", "DTSTART;VALUE=DATE:20260929", "DTEND;VALUE=DATE:20260930", "END:VEVENT",
+    "END:VCALENDAR"
+]);
+
+test "calendar feed: repeats, skipped and moved occurrences" {
+    occs = parse_calendar(ICS, datetime(2026, 9, 28), datetime(2026, 10, 12));
+    lectures = sorted([o.start.strftime("%m-%d %H:%M") + " " + o.title for o in occs if o.uid == "class"]);
+    # 4 occurrences: 09-28, (09-30 skipped), 10-05 moved, 10-07 -> COUNT counts the skipped one
+    assert lectures == ["09-28 10:30 Lecture", "10-05 11:30 Lecture (moved)", "10-07 10:30 Lecture"], lectures;
+    assert "Cancelled" not in [o.title for o in occs];
+    fair = [o for o in occs if o.uid == "fair"];
+    assert len(fair) == 1 and fair[0].all_day;
+}
+
+test "calendar sync is idempotent" {
+    reset();
+    first = (root spawn SyncCalendar(mock=True, today=DAY)).reports[0];
+    again = (root spawn SyncCalendar(mock=True, today=DAY)).reports[0];
+    assert first.created > 10;
+    assert again.created == 0 and again.updated == 0;
+}
+
+test "free time = waking day minus events and meals" {
+    reset();
+    root spawn SaveCalendarSettings(sleep_need_hours=8.0);
+    # No Oura data: bed 23:00, up 07:00 -> 16h awake, minus 2h15 of meals.
+    week = (root spawn CalendarWeekView(start=DAY, today=DAY)).reports[0];
+    d = week.days[0];
+    assert (d.wake, d.bedtime) == ("07:00", "23:00");
+    assert d.awake_minutes == 960 and d.meal_minutes == 135;
+    assert d.free_minutes == 960 - 135;
+    # A 2h exam over lunch time pushes lunch to right after it.
+    root ++> CalEvent(uid="x", title="Exam", day=DAY, start="12:00", end="14:00");
+    d = (root spawn CalendarWeekView(start=DAY, today=DAY)).reports[0].days[0];
+    assert d.event_minutes == 120 and d.meal_minutes == 135;
+    assert [(b.start, b.end) for b in d.blocks if b.label == "Lunch"] == [("14:00", "14:45")];
+    assert d.free_minutes == 960 - 120 - 135;
+    # Late in the day only what's left counts, and the plan is capped by it.
+    late = (root spawn CalendarWeekView(start=DAY, today=DAY, now="21:00")).reports[0].days[0];
+    assert late.free_left_minutes == 120;    # 21:00 -> 23:00
+    add("t-long", minutes=180);
+    plan = (root spawn PlanDay(today=DAY, now="21:00")).reports[0];
+    assert plan.capacity_minutes == 120;
+    assert "t-long" not in titles(plan.suggested);
+}
+
+test "Oura's optimal bedtime sets the day's end" {
+    reset();
+    root ++> HealthSnapshot(day=DAY, readiness=80, wake="06:30", optimal_bedtime="22:15");
+    d = (root spawn CalendarWeekView(start=DAY, today=DAY)).reports[0].days[0];
+    assert (d.wake, d.bedtime, d.bedtime_source) == ("06:30", "22:15", "oura");
 }

@@ -11,12 +11,15 @@ import from services.planner {
 }
 import from services.integrations { SyncCanvas, SyncOura, GetHealth }
 import from services.demo { LoadDemo }
+import from services.calendar {
+    SyncCalendar, CalendarWeekView, GetCalendarSettings, SaveCalendarSettings
+}
 
 # Global styles for the web + mobile client.
 cl import ".styles/global.css";
 
 # One route table for both clients:
-#   /, /today, /projects   -> web app (plan the week at a desk)
+#   /, /today, /calendar, /projects -> web app (plan the week at a desk)
 #   /m, /m/add, /m/upcoming, /m/me -> mobile app (check off + quick add on your phone;
 #                              also what the native Capacitor build opens)
 cl {
@@ -26,6 +29,8 @@ cl {
     import from .routes.WeekPage { WeekPage }
     import from .routes.TodayPage { TodayPage }
     import from .routes.ProjectsPage { ProjectsPage }
+    import from .routes.CalendarPage { CalendarPage }
+    import from .routes.MobileCalendar { MobileCalendar }
     import from .routes.MobileShell { MobileShell }
     import from .routes.MobileToday { MobileToday }
     import from .routes.MobileAdd { MobileAdd }
@@ -42,12 +47,14 @@ cl {
                     <Route path="/" element={<WebShell/>}>
                         <Route index={True} element={<WeekPage/>}/>
                         <Route path="today" element={<TodayPage/>}/>
+                        <Route path="calendar" element={<CalendarPage/>}/>
                         <Route path="projects" element={<ProjectsPage/>}/>
                     </Route>
                     <Route path="/m" element={<MobileShell/>}>
                         <Route index={True} element={<MobileToday/>}/>
                         <Route path="add" element={<MobileAdd/>}/>
                         <Route path="upcoming" element={<MobileUpcoming/>}/>
+                        <Route path="calendar" element={<MobileCalendar/>}/>
                         <Route path="me" element={<MobileMe/>}/>
                     </Route>
                     <Route path="*" element={<Navigate to="/" replace={True}/>}/>

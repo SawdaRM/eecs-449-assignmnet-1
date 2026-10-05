@@ -24,6 +24,7 @@ def:pub MobileShell -> JsxElement {
             <nav className="m-tabs">
                 {tab("/m", "◉", "Today")}
                 {tab("/m/upcoming", "☰", "Upcoming")}
+                {tab("/m/calendar", "▦", "Calendar")}
                 {tab("/m/add", "+", "Add", "add")}
                 {tab("/m/me", "♡", "Me")}
             </nav>

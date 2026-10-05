@@ -19,7 +19,8 @@ Planner is a personal planner that knows **what blocks what** and **how much you
 - **Week planning board.** A Mon–Sun board plus a *Someday* column. Drag tasks between days, and click any task to edit everything about it.
 - **Check off without losing track.** Ticking a task crosses it out with a red line but leaves it where it was, so you can see what you've done. Tick it again to un-cross it. **Clear completed** (on every page, and `./plan clear`) hides all crossed-out tasks at once. They still count toward project and goal progress.
 - **Projects and goals.** Tasks belong to projects, and projects support goals. Goal progress rolls up automatically.
-- **Canvas and Oura.** Canvas assignments become tasks, with the course as the project. Oura sleep and readiness shape the plan. Both work out of the box with realistic mock data, and syncing twice never duplicates anything.
+- **Google Calendar + real free time.** A *Calendar* tab shows your week as timelines: sleep, meals, your Google Calendar events, and the free time left between them. Your day runs from when you woke up (Oura) to tonight's bedtime (Oura's optimal bedtime). Meals and events come out of that, and what's left is your time for to-dos. Each day compares that free time with its to-do load, and *Today* never plans more than the free time you have left.
+- **Canvas and Oura.** Canvas assignments become tasks, with the course as the project. Oura sleep, readiness and recommended bedtime shape the plan. Canvas, Oura and Google Calendar all work out of the box with realistic mock data, and syncing twice never duplicates anything.
 - **Four clients, one plan.** A task added in the terminal shows up on the web board and your phone. Check it off on your phone and the CLI sees it. There's no sign-in: everyone connected to the server shares the same plan.
 
 ## Setup
@@ -54,12 +55,13 @@ jac run
 
 Shortcut: `./start.sh` does the install steps above (only if needed) and then runs `jac run`.
 
-**Load sample data (recommended for a first look):** click **Load demo week** on the empty web board, or run `./plan demo`. This loads 16 tasks, 2 goals, waiting chains, Canvas assignments and a week of readiness data. Running it again replaces only the demo tasks.
+**Load sample data (recommended for a first look):** click **Load demo week** on the empty web board, or run `./plan demo`. This loads 16 tasks, 2 goals, waiting chains, Canvas assignments, a week of readiness data and a sample calendar. Running it again replaces only the demo tasks.
 
 **Using the web app:**
 
 - **Week** (`/`): drag tasks between days. Click a task to edit its dates, priority, energy, project, tags and what it *waits on*. Tick the circle to finish it: it stays in place, crossed out in red, and ticking it again un-crosses it. **Clear completed** hides every finished task. The quick-add bar is at the top.
-- **Today** (`/today`): overdue, today and suggested tasks, with a readiness card and a load meter. *Add all to today* schedules the suggestions.
+- **Today** (`/today`): overdue, today and suggested tasks, with a readiness card, the free time you have left today, and a load meter. *Add all to today* schedules the suggestions.
+- **Calendar** (`/calendar`): the week as timelines of sleep, meals, events and free time. Each day shows its free hours against its to-do load, and you can tick off to-dos from here too. **⚙ Settings** connects Google Calendar and sets your meal times and sleep need.
 - **Projects & goals** (`/projects`): create goals, link projects to them, and watch progress roll up.
 
 ## Mobile app
@@ -76,8 +78,9 @@ The mobile app is the same Jac client with a phone layout (`/m`), connected to t
 
 - **Today:** tap a circle to cross a task out, and tap again to undo. *Plan my day* accepts the suggestions, and **Clear completed** hides finished tasks.
 - **Upcoming:** the next 7 days.
+- **Calendar:** one day's timeline and its free time; tap the day chips to move through the week.
 - **+ Add:** type a title, then tap chips for when, how long and how much energy.
-- **Me:** 7 days of readiness, *Sync Canvas + Oura*, *Load demo week*, and the switch to the desktop view.
+- **Me:** 7 days of readiness, *Sync all*, *Load demo week*, and the switch to the desktop view.
 
 **Optional: build a native iOS or Android app** from the same code with Capacitor. This needs Xcode (iOS) or Android Studio (Android).
 
@@ -115,7 +118,9 @@ The CLI (`cli/plan.jac`) talks to the same server over REST. Run it from the rep
 
 ./plan projects               # progress bars;  ./plan projects "EECS 449" --goal "Finish strong"
 ./plan goals                  # goals and their projects
-./plan sync all               # Canvas + Oura (mock unless configured)
+./plan cal                    # today's free time: events, meals and free blocks until bedtime
+./plan cal -w                 # free time vs to-dos for each day this week
+./plan sync all               # Canvas + Oura + Google Calendar (mock unless configured)
 ./plan health                 # the last 7 days of readiness and sleep
 ./plan help                   # every command
 ```
@@ -138,7 +143,7 @@ The CLI (`cli/plan.jac`) talks to the same server over REST. Run it from the rep
 - **Server** (`main.jac`, `services/`): all planning logic lives here, as walkers that move through the graph. `PlanDay` gathers open tasks and ranks them against your readiness. `ReachesTask` walks `DependsOn` edges to catch loops. Goal progress is counted over `Supports` and `PartOf` edges. Every walker is a public REST endpoint (`POST /walker/<Name>`, with docs at `/docs`).
 - **Web and mobile** (`routes/`, `components/`): one Jac client app with two layouts. Every call goes through `components/api.cl.jac`, which runs the same walkers from the browser (`root spawn`).
 - **CLI** (`cli/plan.jac`): calls the same walkers over HTTP. It decodes the replies into the same typed view objects the server defines in `services/models.jac`, so the server and CLI share one definition of the data.
-- **Integrations** (`services/integrations.jac`): write Canvas assignments and Oura readiness into the graph, where `PlanDay` uses them.
+- **Integrations** (`services/integrations.jac`, `services/calendar.jac`): write Canvas assignments, Oura readiness/sleep and Google Calendar events into the graph. `services/calendar.jac` also builds each day's time budget (wake → events + meals → bedtime), which `PlanDay` uses as a cap.
 
 Because the planning logic lives only in the walkers, the three clients can't disagree about what's due, what's blocked or what fits today.
 
@@ -148,7 +153,7 @@ Because the planning logic lives only in the walkers, the three clients can't di
 - **It uses Jac's graph model for real.** Dependencies, cycle checks and progress rollups are graph traversals, not SQL-style lookups.
 - **Each client suits its job.** The web app is for planning (drag-and-drop week, full editor, goals). The mobile app is for doing (big tap targets, one-tap add, tabs; it also builds as a native app). The CLI is for speed (`./plan add ...`, `./plan done 2`).
 - **Real inputs.** Canvas and Oura, with mock data so it works immediately.
-- **Polish and reliability.** Light and dark themes, empty states, clear error messages, idempotent syncs, data that survives restarts, 8 automated walker tests (`jac test`), and the whole web + mobile + CLI flow checked in a browser from a fresh checkout.
+- **Polish and reliability.** Light and dark themes, empty states, clear error messages, idempotent syncs, data that survives restarts, 12 automated walker tests (`jac test`), and the whole web + mobile + CLI flow checked in a browser from a fresh checkout.
 
 | Task editor ("waits on") | Projects & goals | Mobile: upcoming |
 |---|---|---|
@@ -156,19 +161,35 @@ Because the planning logic lives only in the walkers, the three clients can't di
 
 ## Integrations (optional)
 
+### Google Calendar
+
+The easiest way is in the app: open **Calendar → ⚙ Settings**, paste your calendar's private link, and click **Save & sync**. To get the link:
+
+1. Open [Google Calendar](https://calendar.google.com) on a computer and click ⚙ → **Settings**.
+2. Under **Settings for my calendars** (left side), click the calendar you want.
+3. Scroll to **Integrate calendar** and copy **Secret address in iCal format** (it ends in `basic.ics`).
+
+The link is stored on your planner server and never sent back to the browser. Anyone with the link can read your calendar, so don't commit it or share it. Repeating events (weekly classes and so on), edited or cancelled occurrences, all-day events and time zones are handled. Events marked *Free* ("show as available") and all-day events are shown but don't use up time. Each sync covers the past week and the next 8 weeks, and it replaces the events in that window, so edits and deletions in Google show up too.
+
+**How free time is worked out:** the day starts when you woke up (from Oura; for future days, the previous night's bedtime plus your sleep need) and ends at tonight's bedtime (Oura's optimal bedtime, else your average bedtime, else 11pm). Meals (default 8:00 for 30m, 12:30 for 45m and 18:30 for 60m; change them in Settings) and busy events are taken out, and gaps shorter than 15 minutes don't count. A meal that clashes with an event moves to right after it. On *Today*, the plan uses whichever is smaller: what your readiness allows, or the free time left between now and bedtime.
+
+### Environment variables
+
 Set these before `jac run` to use real data instead of mock data:
 
 | Variable | Where to get it |
 |---|---|
 | `CANVAS_ICS_URL` | Canvas → Calendar → **Calendar Feed** (a private link; don't commit it) |
 | `OURA_ACCESS_TOKEN` | An OAuth2 access token for the Oura API v2 |
+| `GOOGLE_CALENDAR_ICS_URL` | Optional: the Google Calendar link above, if you'd rather not paste it in the app |
 
-> The Oura code uses the v2 endpoints (`daily_readiness`, `daily_sleep`, `sleep`, `daily_activity`) but hasn't been tried with a live account.
+> The Oura code uses the v2 endpoints (`daily_readiness`, `daily_sleep`, `sleep`, `sleep_time`, `daily_activity`) but hasn't been tried with a live account. Bedtime and wake time come from `sleep`, and the optimal bedtime comes from `sleep_time`.
 
 ## Tests
 
 ```bash
-jac test      # walker tests: CRUD, dependencies, cycles, capacity, idempotent sync, demo data
+jac test      # walker tests: CRUD, dependencies, cycles, capacity, idempotent sync, demo data,
+              # calendar parsing (repeats, skipped/moved events), free-time budget, Oura bedtime
 ```
 
 Tests run on their own test root and never touch the planner's real data.
@@ -187,9 +208,10 @@ main.jac                   entry point: registers the walkers + the client route
 services/models.jac        graph nodes/edges and view objects (the shared data contract)
 services/planner.jac       task, planning, project and goal walkers
 services/integrations.jac  Canvas + Oura sync
+services/calendar.jac      Google Calendar sync (iCal parser) + daily free-time budget
 services/demo.jac          LoadDemo: the sample week
 components/                shared UI + api.cl.jac (all client → walker calls)
-routes/                    web pages (WebShell, WeekPage, TodayPage, ProjectsPage) and mobile screens (Mobile*)
+routes/                    web pages (WebShell, WeekPage, TodayPage, CalendarPage, ProjectsPage) and mobile screens (Mobile*)
 styles/global.css          styles for web + mobile (light/dark)
 cli/plan.jac, plan         the CLI and its wrapper
 tests/planner_tests.jac    walker tests

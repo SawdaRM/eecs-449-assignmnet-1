@@ -14,6 +14,10 @@ sv import from ..services.planner {
 }
 sv import from ..services.integrations { SyncCanvas, SyncOura, GetHealth, SyncResult }
 sv import from ..services.demo { LoadDemo }
+sv import from ..services.calendar {
+    SyncCalendar, CalendarWeekView, GetCalendarSettings, SaveCalendarSettings,
+    CalendarWeek, DayBudget, TimeBlock, CalSettingsView, EventView
+}
 
 
 # ================================================================ dates (local time)
@@ -36,6 +40,34 @@ def _parse(day: str) -> any {
 
 def:pub today_iso() -> str {
     return _iso(new(Date));  # jac:ignore[W2001]
+}
+
+"""The local clock as 'HH:MM'."""
+def:pub now_hhmm() -> str {
+    d = new(Date);  # jac:ignore[W2001]
+    return f"{pad2(d.getHours() as int)}:{pad2(d.getMinutes() as int)}";
+}
+
+"""'HH:MM' -> minutes since midnight."""
+def:pub to_min(hhmm: str) -> int {
+    parts = hhmm.split(":");
+    if len(parts) < 2 {
+        return 0;
+    }
+    return int(parts[0]) * 60 + int(parts[1]);
+}
+
+"""'14:30' -> '2:30pm', '09:00' -> '9am'."""
+def:pub clock(hhmm: str) -> str {
+    m = to_min(hhmm) % 1440;
+    mins = m % 60;
+    h = (m - mins) / 60;
+    suffix = "am" if h < 12 else "pm";
+    h12 = h % 12;
+    if h12 == 0 {
+        h12 = 12;
+    }
+    return f"{h12}{':' + pad2(mins) if mins else ''}{suffix}";
 }
 
 def:pub add_days(day: str, n: int) -> str {
@@ -195,7 +227,7 @@ async def:pub next_actions(limit: int) -> list[TaskView] {
 # ================================================================ planning views
 
 async def:pub plan_day(commit: bool) -> DayPlan {
-    result = root spawn PlanDay(today=today_iso(), commit=commit);
+    result = root spawn PlanDay(today=today_iso(), now=now_hhmm(), commit=commit);
     return result.reports[0];
 }
 
@@ -240,13 +272,59 @@ async def:pub sync_oura() -> SyncResult {
     return result.reports[0];
 }
 
-"""Fill the planner with a realistic demo week (plus mock Canvas + Oura)."""
+async def:pub sync_calendar() -> SyncResult {
+    result = root spawn SyncCalendar(today=today_iso());
+    return result.reports[0];
+}
+
+"""Canvas, Oura and Google Calendar in one go; returns a combined message."""
+async def:pub sync_all() -> str {
+    c = await sync_canvas();
+    o = await sync_oura();
+    g = await sync_calendar();
+    return f"{c.message} {o.message} {g.message}";
+}
+
+"""Fill the planner with a realistic demo week (plus mock Canvas, Oura, calendar)."""
 async def:pub load_demo() -> str {
     result = root spawn LoadDemo(today=today_iso());
     first: SyncResult = result.reports[0];
-    c = await sync_canvas();
-    o = await sync_oura();
-    return f"{first.message} {c.message} {o.message}";
+    rest = await sync_all();
+    return f"{first.message} {rest}";
+}
+
+async def:pub calendar_week(start: str) -> CalendarWeek {
+    result = root spawn CalendarWeekView(start=start, today=today_iso(), now=now_hhmm());
+    return result.reports[0];
+}
+
+async def:pub cal_settings() -> CalSettingsView {
+    result = root spawn GetCalendarSettings();
+    return result.reports[0];
+}
+
+"""Pass gcal_ics_url="~keep" to leave the saved calendar link unchanged."""
+async def:pub save_cal_settings(
+    gcal_ics_url: str,
+    breakfast: str,
+    breakfast_minutes: int,
+    lunch: str,
+    lunch_minutes: int,
+    dinner: str,
+    dinner_minutes: int,
+    sleep_need_hours: float
+) -> CalSettingsView {
+    result = root spawn SaveCalendarSettings(
+        gcal_ics_url=gcal_ics_url,
+        breakfast=breakfast,
+        breakfast_minutes=breakfast_minutes,
+        lunch=lunch,
+        lunch_minutes=lunch_minutes,
+        dinner=dinner,
+        dinner_minutes=dinner_minutes,
+        sleep_need_hours=sleep_need_hours
+    );
+    return result.reports[0];
 }
 
 async def:pub health(days: int) -> list[HealthView] {

@@ -1,16 +1,15 @@
-"""Pull Canvas assignments and Oura health data (mock data unless configured)."""
+"""Pull Canvas assignments, Oura health data and Google Calendar events
+(mock data unless configured)."""
 
-import from .api { sync_canvas, sync_oura, err_text }
+import from .api { sync_all, err_text }
 
-def:pub SyncButton(onDone: Callable[[str], None], label: str = "Sync Canvas + Oura") -> JsxElement {
+def:pub SyncButton(onDone: Callable[[str], None], label: str = "Sync all") -> JsxElement {
     has busy: bool = False;
 
     async def run {
         busy = True;
         try {
-            c = await sync_canvas();
-            o = await sync_oura();
-            onDone(f"{c.message} {o.message}");
+            onDone(await sync_all());
         } except Exception as e {
             onDone(err_text(e));
         }
@@ -18,7 +17,7 @@ def:pub SyncButton(onDone: Callable[[str], None], label: str = "Sync Canvas + Ou
     }
 
     return
-        <button onClick={run} disabled={busy} title="Import assignments and readiness data">
+        <button onClick={run} disabled={busy} title="Import assignments, readiness data and calendar events">
             {"Syncing…" if busy else "⟳ " + label}
         </button>;
 }

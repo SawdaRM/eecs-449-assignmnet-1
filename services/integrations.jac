@@ -182,16 +182,27 @@ def _round1(x: float) -> float {
     return int(x * 10 + 0.5) / 10;
 }
 
+def _hhmm(minutes: int) -> str {
+    m = minutes % 1440;
+    return f"{m // 60:02d}:{m % 60:02d}";
+}
+
 """Deterministic fake data: the same day always gets the same numbers."""
 def _mock_health(day: str) -> HealthSnapshot {
     h = int(hashlib.sha256(day.encode()).hexdigest()[:8], 16);
+    sleep_hours = _round1(5.5 + ((h // 7) % 30) / 10);   # 5.5..8.4
+    optimal = 22 * 60 + 30 + 15 * ((h // 17) % 4);       # 22:30..23:15
+    went_to_bed = optimal + (h // 23) % 70 - 10;         # a bit before to an hour late
     return HealthSnapshot(
         day=day,
         readiness=55 + h % 41,                    # 55..95
         sleep_score=58 + (h // 41) % 38,          # 58..95
-        sleep_hours=_round1(5.5 + ((h // 7) % 30) / 10),  # 5.5..8.4
+        sleep_hours=sleep_hours,
         steps=3000 + (h // 13) % 9000,
-        source="mock"
+        source="mock",
+        bedtime=_hhmm(went_to_bed),
+        wake=_hhmm(went_to_bed + int(sleep_hours * 60) + 25),
+        optimal_bedtime=_hhmm(optimal)
     );
 }
 
@@ -202,6 +213,14 @@ def _oura_get(path: str, start: str, end: str, token: str) -> list[dict] {
     body = str(resp.read().decode());
     resp.close();
     return json.loads(body).get("data", []) as list[dict];
+}
+
+"""'2026-10-04T23:12:00-04:00' -> '23:12' (the wall-clock time Oura recorded)."""
+def _clock(stamp: str) -> str {
+    if "T" not in stamp {
+        return "";
+    }
+    return stamp.split("T", 1)[1][:5];
 }
 
 def _fetch_oura(start: str, end: str, token: str) -> list[HealthSnapshot] {
@@ -223,8 +242,25 @@ def _fetch_oura(start: str, end: str, token: str) -> list[HealthSnapshot] {
     for r in _oura_get("sleep", start, end, token) {
         secs = r.get("total_sleep_duration") or 0;
         s = slot(str(r["day"]));
-        s.sleep_hours = max(s.sleep_hours, _round1(float(secs) / 3600));
+        hrs = _round1(float(secs) / 3600);
+        if hrs >= s.sleep_hours {
+            # the main sleep of the night: when you went to bed and got up
+            s.sleep_hours = hrs;
+            s.bedtime = _clock(str(r.get("bedtime_start") or ""));
+            s.wake = _clock(str(r.get("bedtime_end") or ""));
+        }
     }
+    # Oura's recommended bedtime window (offsets in seconds from midnight).
+    # Not every account has it, so a failure here doesn't stop the sync.
+    try {
+        for r in _oura_get("sleep_time", start, end, token) {
+            win = r.get("optimal_bedtime") or {};
+            if isinstance(win, dict) and win.get("start_offset") is not None {
+                secs = int(win["start_offset"]);
+                slot(str(r["day"])).optimal_bedtime = _hhmm((secs // 60) % 1440);
+            }
+        }
+    } except Exception {}
     for r in _oura_get("daily_activity", start, end, token) {
         slot(str(r["day"])).steps = int(r.get("steps") or 0);
     }
@@ -269,6 +305,9 @@ walker:pub SyncOura {
                 old.sleep_hours = snap.sleep_hours;
                 old.steps = snap.steps;
                 old.source = snap.source;
+                old.bedtime = snap.bedtime;
+                old.wake = snap.wake;
+                old.optimal_bedtime = snap.optimal_bedtime;
                 updated += 1;
             } else {
                 root ++> snap;

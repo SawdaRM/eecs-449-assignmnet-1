@@ -27,6 +27,7 @@ def:pub WebShell -> JsxElement {
                 <span className="brand">◆ Planner</span>
                 {tab("/", "Week")}
                 {tab("/today", "Today")}
+                {tab("/calendar", "Calendar")}
                 {tab("/projects", "Projects & goals")}
                 <span className="spacer"/>
                 <button className="ghost small" onClick={to_mobile}>Mobile view</button>

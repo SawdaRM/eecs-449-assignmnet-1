@@ -18,6 +18,7 @@ import from services.models {
     task_view, project_view, goal_view, health_view,
     _now, _day_or_today, _valid_day, _clean_energy, _clean_priority
 }
+import from services.calendar { budget_context, day_budget }
 
 
 glob KEEP: str = "~keep";
@@ -459,10 +460,13 @@ walker:pub PlanDay {
     - today:     tasks scheduled or due today, plus anything finished today
     - suggested: unblocked tasks that fit the remaining capacity, ranked by
                  due date, priority and (if you have Oura data) energy fit
+    Capacity is the smaller of what your readiness allows and the free time
+    left between calendar events, meals and bedtime (from `now`, "HH:MM").
     Finished tasks stay in their section (crossed out) until you clear them.
     `commit: true` schedules the suggestions onto today.
     """
     has today: str = "",
+        now: str = "",
         commit: bool = False,
         tasks: list[Task] = [],
         reports: list[DayPlan] = [];
@@ -481,7 +485,9 @@ walker:pub PlanDay {
         day = _day_or_today(self.today);
         h = _health_for(day);
         readiness = h.readiness if h is not None else 0;
-        capacity = _capacity(readiness);
+        focus = _capacity(readiness);
+        budget = day_budget(day, day, self.now, budget_context());
+        capacity = min(focus, budget.free_left_minutes);
 
         def done_today(t: Task) -> bool {
             return t.status == "done" and t.done_at.startswith(day);
@@ -509,11 +515,11 @@ walker:pub PlanDay {
         pool.sort(key=lambda t: Task : _score(t, day, readiness));
 
         suggested: list[Task] = [];
-        budget = capacity - planned - sum([t.est_minutes for t in overdue]);
+        room = capacity - planned - sum([t.est_minutes for t in overdue]);
         for t in pool {
-            if t.est_minutes <= budget {
+            if t.est_minutes <= room {
                 suggested.append(t);
-                budget -= t.est_minutes;
+                room -= t.est_minutes;
             }
         }
 
@@ -534,6 +540,14 @@ walker:pub PlanDay {
             note = f"Readiness {readiness}: strong day, deep work pulled forward.";
         } else {
             note = f"Readiness {readiness}: normal day.";
+        }
+        if budget.free_left_minutes < focus {
+            left = budget.free_left_minutes;
+            if left == 0 {
+                note += f" No free time left before bed ({budget.bedtime}).";
+            } else {
+                note += f" Only {left // 60}h{left % 60:02d} free left before bed ({budget.bedtime}), so that's the cap.";
+            }
         }
 
         # Overbooked? Point at the task that's easiest to move: scheduled for
@@ -565,7 +579,13 @@ walker:pub PlanDay {
             today=_sort_views([task_view(t, day) for t in on_today]),
             suggested=[task_view(t, day) for t in suggested],
             done_today=[],
-            note=note
+            note=note,
+            wake=budget.wake,
+            bedtime=budget.bedtime,
+            event_minutes=budget.event_minutes,
+            free_minutes=budget.free_minutes,
+            free_left_minutes=budget.free_left_minutes,
+            readiness_capacity=focus
         );
     }
 }

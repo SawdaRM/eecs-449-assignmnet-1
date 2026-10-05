@@ -7,6 +7,8 @@ Each signed-in user gets their own `root`. Everything hangs off it:
                └──DependsOn──► Task        (this task is blocked until that one is done)
 
     root ──► HealthSnapshot   (one per day, from Oura or mock data)
+    root ──► CalEvent         (one per occurrence per day, from Google Calendar or mock data)
+    root ──► CalSettings      (at most one: calendar link, meal times, sleep need)
 
 Tasks always hang directly off `root`, so "all my tasks" is a single hop.
 Projects, goals and dependencies are typed edges layered on top.
@@ -54,6 +56,33 @@ node HealthSnapshot {
     has sleep_hours: float = 0.0;
     has steps: int = 0;
     has source: str = "mock";
+    has bedtime: str = "";          # "HH:MM" you went to bed the night before this day
+    has wake: str = "";             # "HH:MM" you got up on this day
+    has optimal_bedtime: str = "";  # "HH:MM" Oura's recommended bedtime for tonight
+}
+
+node CalEvent {
+    has uid: str;                 # event UID + occurrence start, for idempotent sync
+    has title: str;
+    has day: str;                 # "YYYY-MM-DD" (local)
+    has start: str = "";          # "HH:MM" local, "" for all-day events
+    has end: str = "";            # "HH:MM" local ("24:00" = midnight)
+    has all_day: bool = False;
+    has busy: bool = True;        # False for "show as available" events
+    has location: str = "";
+    has source: str = "mock";     # "google" | "mock"
+}
+
+node CalSettings {
+    has gcal_ics_url: str = "";   # private "Secret address in iCal format"
+    has breakfast: str = "08:00";
+    has breakfast_minutes: int = 30;
+    has lunch: str = "12:30";
+    has lunch_minutes: int = 45;
+    has dinner: str = "18:30";
+    has dinner_minutes: int = 60;
+    has sleep_need_hours: float = 8.0;
+    has last_synced: str = "";
 }
 
 
@@ -116,7 +145,10 @@ obj HealthView {
         sleep_score: int,
         sleep_hours: float,
         steps: int,
-        source: str;
+        source: str,
+        bedtime: str = "",
+        wake: str = "",
+        optimal_bedtime: str = "";
 }
 
 obj DayPlan {
@@ -128,7 +160,13 @@ obj DayPlan {
         today: list[TaskView],
         suggested: list[TaskView],
         done_today: list[TaskView],
-        note: str;
+        note: str,
+        wake: str = "",
+        bedtime: str = "",
+        event_minutes: int = 0,
+        free_minutes: int = 0,
+        free_left_minutes: int = 0,
+        readiness_capacity: int = 0;
 }
 
 obj WeekDay {
@@ -142,6 +180,66 @@ obj WeekPlan {
     has start: str,
         days: list[WeekDay],
         unscheduled: list[TaskView];
+}
+
+obj EventView {
+    has id: str,
+        title: str,
+        day: str,
+        start: str,
+        end: str,
+        all_day: bool,
+        busy: bool,
+        location: str,
+        source: str;
+}
+
+"""A stretch of the waking day: an event, a meal, or free time."""
+obj TimeBlock {
+    has start: str,
+        end: str,
+        minutes: int,
+        kind: str,          # "event" | "tentative" | "meal" | "free"
+        label: str;
+}
+
+"""How one day's waking hours break down, and how much is left for to-dos."""
+obj DayBudget {
+    has day: str,
+        weekday: str,
+        wake: str,
+        bedtime: str,
+        bedtime_source: str,    # "oura" | "average" | "default"
+        awake_minutes: int,
+        event_minutes: int,
+        meal_minutes: int,
+        free_minutes: int,
+        free_left_minutes: int, # free time still ahead of `now` (today only)
+        task_minutes: int,      # open to-dos scheduled or due that day
+        blocks: list[TimeBlock],
+        all_day: list[EventView],
+        tasks: list[TaskView];
+}
+
+obj CalendarWeek {
+    has start: str,
+        days: list[DayBudget],
+        connected: bool,
+        source: str,            # "google" | "mock" | ""
+        last_synced: str;
+}
+
+obj CalSettingsView {
+    has connected: bool,
+        from_env: bool,
+        breakfast: str,
+        breakfast_minutes: int,
+        lunch: str,
+        lunch_minutes: int,
+        dinner: str,
+        dinner_minutes: int,
+        sleep_need_hours: float,
+        last_synced: str;
 }
 
 obj SyncResult {
@@ -222,7 +320,10 @@ def health_view(h: HealthSnapshot) -> HealthView {
         sleep_score=h.sleep_score,
         sleep_hours=h.sleep_hours,
         steps=h.steps,
-        source=h.source
+        source=h.source,
+        bedtime=h.bedtime,
+        wake=h.wake,
+        optimal_bedtime=h.optimal_bedtime
     );
 }
 
@@ -239,6 +340,20 @@ def project_view(p: Project) -> ProjectView {
         total=len(tasks),
         done=done,
         progress=(done * 1000 // len(tasks)) / 1000 if tasks else 0.0
+    );
+}
+
+def event_view(e: CalEvent) -> EventView {
+    return EventView(
+        id=jid(e),
+        title=e.title,
+        day=e.day,
+        start=e.start,
+        end=e.end,
+        all_day=e.all_day,
+        busy=e.busy,
+        location=e.location,
+        source=e.source
     );
 }
 

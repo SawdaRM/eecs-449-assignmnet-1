@@ -1,6 +1,7 @@
-"""Readiness ring + how full today is. Used on web Today and mobile Today."""
+"""Readiness ring, free time left today, and how full today is.
+Used on web Today and mobile Today."""
 
-import from .api { hours }
+import from .api { hours, clock }
 sv import from ..services.planner { DayPlan }
 
 def:pub HealthCard(plan: DayPlan) -> JsxElement {
@@ -26,6 +27,23 @@ def:pub HealthCard(plan: DayPlan) -> JsxElement {
                     <div className="small muted">{plan.note}</div>
                 </div>
             </div>
+            {if plan.bedtime {
+                <div key="free" className="free-box">
+                    <div className="row" style={{"alignItems": "baseline"}}>
+                        <span className="free-num">{hours(plan.free_left_minutes)}</span>
+                        <span className="small muted grow">free left today</span>
+                        <span className="small faint">{"bed " + clock(plan.bedtime)}</span>
+                    </div>
+                    <div className="small muted">
+                        {f"Up {clock(plan.wake)} · {hours(plan.event_minutes)} of events · {hours(plan.free_minutes)} free all day, after sleep, meals and calendar"}
+                    </div>
+                    {if plan.readiness_capacity > plan.free_left_minutes {
+                        <div key="cap" className="small" style={{"color": "var(--warn)", "marginTop": "3px"}}>
+                            {f"Your readiness allows {hours(plan.readiness_capacity)}, but you only have {hours(plan.free_left_minutes)} free, so today's plan is capped there."}
+                        </div>
+                    }}
+                </div>
+            }}
             <div style={{"marginTop": "12px"}}>
                 <div className="row small" style={{"marginBottom": "5px"}}>
                     <span className="grow muted">Today's load</span>

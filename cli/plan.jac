@@ -14,7 +14,7 @@ import json;
 import argparse;
 import from urllib.request { urlopen, Request }
 import from urllib.error { HTTPError, URLError }
-import from datetime { date, timedelta }
+import from datetime { date, datetime, timedelta }
 import from services.models {
     TaskView, ProjectView, GoalView, HealthView, DayPlan, WeekDay, WeekPlan, SyncResult
 }
@@ -160,7 +160,13 @@ def to_plan(raw: any) -> DayPlan {
         today=to_tasks(d["today"]),
         suggested=to_tasks(d["suggested"]),
         done_today=to_tasks(d["done_today"]),
-        note=str(d["note"])
+        note=str(d["note"]),
+        wake=str(d.get("wake", "")),
+        bedtime=str(d.get("bedtime", "")),
+        event_minutes=int(d.get("event_minutes", 0)),
+        free_minutes=int(d.get("free_minutes", 0)),
+        free_left_minutes=int(d.get("free_left_minutes", 0)),
+        readiness_capacity=int(d.get("readiness_capacity", 0))
     );
 }
 
@@ -370,11 +376,14 @@ def cmd_add(a: any) {
 }
 
 def cmd_today(a: any) {
-    p = to_plan(api("PlanDay", {"commit": bool(a.commit)}));
+    p = to_plan(api("PlanDay", {"commit": bool(a.commit), "now": _now_hhmm()}));
     print(bold(long_day(p.day)));
     h = p.health;
     if h is not None {
         print(dim(f"readiness {h.readiness} · sleep {h.sleep_hours}h (score {h.sleep_score}) · {h.source}"));
+    }
+    if p.bedtime {
+        print(green(f"{hours(p.free_left_minutes)} free left today") + dim(f" · up {p.wake}, bed {p.bedtime} · {hours(p.event_minutes)} of events"));
     }
     print(dim(p.note));
     shown: list[TaskView] = [];
@@ -571,11 +580,16 @@ def cmd_goals(a: any) {
     }
 }
 
+def _now_hhmm() -> str {
+    return datetime.now().strftime("%H:%M");
+}
+
 def cmd_sync(a: any) {
     source = str(a.source);
-    targets = ["canvas", "oura"] if source == "all" else [source];
+    targets = ["canvas", "oura", "calendar"] if source == "all" else [source];
+    names = {"canvas": "SyncCanvas", "oura": "SyncOura", "calendar": "SyncCalendar"};
     for s in targets {
-        walker_name = "SyncCanvas" if s == "canvas" else "SyncOura";
+        walker_name = names[s];
         r = to_sync(api(walker_name, {"mock": bool(a.mock)}));
         print(green("✔ ") + r.message);
     }
@@ -584,7 +598,7 @@ def cmd_sync(a: any) {
 def cmd_demo(a: any) {
     r = to_sync(api("LoadDemo", {}));
     print(green("✔ ") + r.message);
-    for w in ["SyncCanvas", "SyncOura"] {
+    for w in ["SyncCanvas", "SyncOura", "SyncCalendar"] {
         print(green("✔ ") + to_sync(api(w, {"mock": True})).message);
     }
     print(dim("Try: ./plan today   ./plan week   or open http://localhost:8000"));
@@ -600,6 +614,48 @@ def cmd_health(a: any) {
         r = h.readiness;
         colored = green(str(r)) if r >= 85 else (yellow(str(r)) if r >= 70 else red(str(r)));
         print(f"{h.day}  readiness {colored}  sleep {h.sleep_hours}h ({h.sleep_score})  steps {h.steps}  {dim(h.source)}");
+    }
+}
+
+"""Free time for each day: waking hours minus calendar events and meals."""
+def cmd_cal(a: any) {
+    body: dict[str, any] = {"now": _now_hhmm()};
+    if a.start {
+        body["start"] = parse_day(str(a.start));
+    }
+    week = (api("CalendarWeekView", body) or {}) as dict[str, any];
+    today = date.today().isoformat();
+    days = week.get("days", []) as list[dict[str, any]];
+    if not a.week {
+        days = [d for d in days if d["day"] == (parse_day(str(a.start)) if a.start else today)];
+    }
+    if not week.get("connected") {
+        print(dim("(sample calendar - connect Google Calendar on the web Calendar page)"));
+    }
+    for d in days {
+        avail = int(d["free_left_minutes"]) if d["day"] == today else int(d["free_minutes"]);
+        todo = int(d["task_minutes"]);
+        label = "free left" if d["day"] == today else "free";
+        load = red(f"{hours(todo)} of to-dos") if todo > avail else dim(f"{hours(todo)} of to-dos");
+        print(bold(long_day(str(d["day"]))) + "  " + green(f"{hours(avail)} {label}") + "  " + load);
+        print(dim(f"    up {d['wake']} · bed {d['bedtime']} ({d['bedtime_source']})"));
+        for ev in d["all_day"] as list[dict[str, any]] {
+            print(f"    {cyan('all day')}      {ev['title']}");
+        }
+        if a.week {
+            continue;
+        }
+        for b in d["blocks"] as list[dict[str, any]] {
+            when = f"{b['start']}-{b['end']}";
+            kind = str(b["kind"]);
+            if kind == "free" {
+                print(green(f"    {when}  free {hours(int(b['minutes']))}"));
+            } elif kind == "meal" {
+                print(dim(f"    {when}  {b['label']}"));
+            } else {
+                print(f"    {when}  {b['label']}");
+            }
+        }
     }
 }
 
@@ -703,8 +759,13 @@ def build_parser() -> argparse.ArgumentParser {
     r.add_argument("--by");
     r.set_defaults(fn=cmd_goals);
 
-    r = sub.add_parser("sync", help="pull Canvas assignments / Oura data");
-    r.add_argument("source", choices=["canvas", "oura", "all"]);
+    r = sub.add_parser("cal", help="today's free time around calendar events, meals and sleep");
+    r.add_argument("--start", help="another day (or the week starting there, with --week)");
+    r.add_argument("-w", "--week", action="store_true", help="the whole week, one line per day");
+    r.set_defaults(fn=cmd_cal);
+
+    r = sub.add_parser("sync", help="pull Canvas assignments / Oura data / Google Calendar");
+    r.add_argument("source", choices=["canvas", "oura", "calendar", "all"]);
     r.add_argument("--mock", action="store_true", help="force mock data");
     r.set_defaults(fn=cmd_sync);
 
